@@ -102,52 +102,57 @@ def resize_with_aspect_ratio(image, width=None, height=None, inter=cv2.INTER_ARE
 
     return cv2.resize(image, dim, interpolation=inter)
 
-# construct the argument parse and parse the arguments
-# noinspection DuplicatedCode
-ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--image", required=True,
-                help="path to the input image")
-args = vars(ap.parse_args())
 
-# define the answer key which maps the question number
-# to the correct answer
-ANSWER_KEY = {0: 1, 1: 4, 2: 0, 3: 3, 4: 1}
+def main():
+    # construct the argument parse and parse the arguments
+    # noinspection DuplicatedCode
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-i", "--image", required=True,
+                    help="path to the input image")
+    args = vars(ap.parse_args())
 
-# load the image, convert it to grayscale, blur it slightly
-user_image = cv2.imread(args["image"]).copy()
-# TODO: used for debugging
-# user_image = cv2.resize(user_image, (0, 0), fx=0.5, fy=0.5)
-warped = get_paper(user_image)
+    # define the answer key which maps the question number
+    # to the correct answer
+    ANSWER_KEY = {0: 1, 1: 4, 2: 0, 3: 3, 4: 1}
 
-# warped = cv2.GaussianBlur(warped, (3, 3), 0)
-cv2.imshow("warped", warped)
-# fifth parameter must be odd
-# thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 201, 40)
-thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 4)
+    # load the image, convert it to grayscale, blur it slightly
+    user_image = cv2.imread(args["image"]).copy()
+    # TODO: used for debugging
+    # user_image = cv2.resize(user_image, (0, 0), fx=0.5, fy=0.5)
+    warped = get_paper(user_image)
 
-# find contours in the thresholded image, then initialize
-# the list of contours that correspond to questions
-bubble_contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
-                                              cv2.CHAIN_APPROX_SIMPLE)
+    # warped = cv2.GaussianBlur(warped, (3, 3), 0)
+    cv2.imshow("warped", warped)
+    # fifth parameter must be odd
+    # thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 201, 40)
+    thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 4)
 
-# #print(bubble_contours)
-# questionCnts = []
-# # loop over the contours
-# for c in bubble_contours:
-#     # compute the bounding box of the contour, then use the
-#     # bounding box to derive the aspect ratio
-#     (x, y, w, h) = cv2.boundingRect(c)
-#     ar = w / float(h)
-#     # in order to label the contour as a question, region
-#     # should be sufficiently wide, sufficiently tall, and
-#     # have an aspect ratio approximately equal to 1
-#     if w >= 20 and h >= 20 and ar >= 0.9 and ar <= 1.1:
-#         questionCnts.append(c)
+    # find contours in the thresholded image, then initialize
+    # the list of contours that correspond to questions
+    bubble_contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
+                                                  cv2.CHAIN_APPROX_SIMPLE)
 
-height, width = thresh.shape
-blank_image = np.zeros((height, width, 3), np.uint8)
-cv2.drawContours(blank_image, bubble_contours, -1, (0, 0, 255), 1)
+    # #print(bubble_contours)
+    # questionCnts = []
+    # # loop over the contours
+    # for c in bubble_contours:
+    #     # compute the bounding box of the contour, then use the
+    #     # bounding box to derive the aspect ratio
+    #     (x, y, w, h) = cv2.boundingRect(c)
+    #     ar = w / float(h)
+    #     # in order to label the contour as a question, region
+    #     # should be sufficiently wide, sufficiently tall, and
+    #     # have an aspect ratio approximately equal to 1
+    #     if w >= 20 and h >= 20 and ar >= 0.9 and ar <= 1.1:
+    #         questionCnts.append(c)
 
-cv2.imshow("threshold", thresh)
-cv2.imshow("contours", blank_image)
-cv2.waitKey(0)
+    height, width = thresh.shape
+    blank_image = np.zeros((height, width, 3), np.uint8)
+    cv2.drawContours(blank_image, bubble_contours, -1, (0, 0, 255), 1)
+
+    cv2.imshow("threshold", thresh)
+    cv2.imshow("contours", blank_image)
+    cv2.waitKey(0)
+
+
+if __name__ == "__main__":main()
