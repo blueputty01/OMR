@@ -21,12 +21,15 @@ def auto_canny(image, sigma=0.33):
     return cannied
 
 
-def get_section_contours(passed_image, width, height):
+def get_section(width, height, passed_image):
+
+    # find edges
+    # ret, thresh = cv2.threshold(edged, 127, 255, 0)
+
     gray = cv2.cvtColor(passed_image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
     edged = auto_canny(blurred)
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 4)
-    cv2.imshow("lmoa", thresh)
     contour_data, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(passed_image, contour_data, -1, (0, 0, 255), 3)
 
@@ -69,30 +72,24 @@ def get_section_contours(passed_image, width, height):
                 # in order to label the contour as a question, region
                 # should be sufficiently wide, sufficiently tall, and
                 # have an aspect ratio approximately equal to 1
-                # if math.isclose(ratio, test_ratio, rel_tol=0.01):
-                print(approx)
-                print(i)
-                section_contours = approx
-                break
+                if math.isclose(ratio, test_ratio, rel_tol=0.1):
+                    print(ratio)
+                    print(test_ratio)
+                    print(approx)
+                    print(i)
+                    section_contours = approx
+                    break
+        print(section_contours)
         blank_image = cv2.polylines(blank_image, [section_contours], False, (255, 255, 255), 1)
         hi = resize_with_aspect_ratio(blank_image, height=700)
         cv2.imshow("contours i'm working with", hi)
-    return section_contours
 
+        # TODO: remove; for debugging contours:
+        # passed_image = cv2.polylines(passed_image, [section_contours], True, (0, 255, 0), 1)
 
-def get_section(passed_image):
-
-    # find edges
-    # ret, thresh = cv2.threshold(edged, 127, 255, 0)
-
-    section_contours = get_section_contours(passed_image, 7, 1.5)
-
-    # TODO: remove; for debugging contours:
-    # passed_image = cv2.polylines(passed_image, [section_contours], True, (0, 255, 0), 1)
-
-    # numpy.reshape: 4 arrays, each with 2 elements
-    # warped = four_point_transform(passed_image, section_contours.reshape(4, 2))
-    # return warped
+        # numpy.reshape: 4 arrays, each with 2 elements
+    warped = four_point_transform(gray, section_contours.reshape(4, 2))
+    return warped
 
 
 def resize_with_aspect_ratio(image, width=None, height=None, inter=cv2.INTER_AREA):
@@ -127,10 +124,10 @@ def main():
     user_image = cv2.imread(args["image"]).copy()
     # TODO: used for debugging
     # user_image = cv2.resize(user_image, (0, 0), fx=0.5, fy=0.5)
-    warped = get_section(user_image)
+    warped = get_section(7, 1.5, user_image)
 
     # # warped = cv2.GaussianBlur(warped, (3, 3), 0)
-    # cv2.imshow("warped", warped)
+    cv2.imshow("warped", warped)
     # # fifth parameter must be odd
     # # thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 201, 40)
     # thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 4)
