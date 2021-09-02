@@ -165,7 +165,6 @@ def grade_column(warped):
             color = (0, 255, 0)
             correct += 1
         # draw the outline of the correct answer on the test
-        print(k)
         # print(sorted_bubbles[k])
         cv2.drawContours(warped, [sorted_bubbles[k]], -1, color, 3)
     cv2.imshow("marked", warped)
@@ -191,7 +190,6 @@ def main():
     ap.add_argument("-i", "--image", required=True,
                     help="path to the input image")
     args = vars(ap.parse_args())
-
 
     # load the image, convert it to grayscale, blur it slightly
     user_image = cv2.imread(args["image"]).copy()
