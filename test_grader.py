@@ -10,6 +10,11 @@ import cv2
 import os
 
 
+# define the answer key which maps the question number
+# to the correct answer
+ANSWER_KEY = {0: 2, 1: 3, 2: 0, 3: 3, 4: 1, 5: 1, 6: 1, 7: 3, 8: 3, 9: 2}
+
+
 def auto_canny(image, sigma=0.33):
     # compute the median of the single channel pixel intensities
     v = np.median(image)
@@ -65,7 +70,6 @@ def get_section(width, height, passed_image):
                     section_contours.append(approx)
 
         section_contours = contours.sort_contours(section_contours, method="top-to-bottom")[0]
-    print(section_contours[0])
     # numpy.reshape: 4 arrays, each with 2 elements
     warped = four_point_transform(gray, section_contours[0].reshape(4, 2))
     return warped
@@ -87,8 +91,7 @@ def resize_with_aspect_ratio(image, width=None, height=None, inter=cv2.INTER_ARE
     return cv2.resize(image, dim, interpolation=inter)
 
 
-def get_bubbles(warped):
-    print('HI')
+def grade_column(warped):
     # fifth parameter must be odd
     # TODO: use text recognition?
     warped = cv2.GaussianBlur(warped, (1, 1), 0)
@@ -113,15 +116,59 @@ def get_bubbles(warped):
         i += 1
         (x, y, w, h) = cv2.boundingRect(contour)
         if valid_contour(1/8, 1/16, 10, 10, 0.4, contour):
-            print("valid", i)
-            blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            # blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
             question_contours.append(contour)
 
     question_contours = contours.sort_contours(question_contours, method="top-to-bottom")[0]
 
+    i = 0
+    for contour in question_contours:
+        i += 1
+        (x, y, w, h) = cv2.boundingRect(contour)
+        blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
     blank_image = cv2.drawContours(blank_image, question_contours, -1, (0, 0, 255), 1)
     cv2.imshow("question contours", blank_image)
-    return question_contours
+
+    correct = 0
+    # each question has 5 possible answers, to loop over the
+    # question in batches of 5
+    for (q, i) in enumerate(np.arange(0, len(question_contours), 4)):
+        # sort the contours for the current question from
+        # left to right, then initialize the index of the
+        # bubbled answer
+        sorted_bubbles = contours.sort_contours(question_contours[i:i + 4])[0]
+        bubbled = None
+
+        # loop over the sorted contours
+        for (j, c) in enumerate(sorted_bubbles):
+            # construct a mask that reveals only the current
+            # "bubble" for the question
+            mask = np.zeros(thresh.shape, dtype="uint8")
+            cv2.drawContours(mask, [c], -1, 255, -1)
+            # apply the mask to the thresholded image, then
+            # count the number of non-zero pixels in the
+            # bubble area
+            mask = cv2.bitwise_and(thresh, thresh, mask=mask)
+            total = cv2.countNonZero(mask)
+            # if the current total has a larger number of total
+            # non-zero pixels, then we are examining the currently
+            # bubbled-in answer
+            if bubbled is None or total > bubbled[0]:
+                bubbled = (total, j)
+        # initialize the contour color and the index of the
+        # *correct* answer
+        color = (0, 0, 255)
+        k = ANSWER_KEY[q]
+        # check to see if the bubbled answer is correct
+        if k == bubbled[1]:
+            color = (0, 255, 0)
+            correct += 1
+        # draw the outline of the correct answer on the test
+        print(k)
+        # print(sorted_bubbles[k])
+        cv2.drawContours(warped, [sorted_bubbles[k]], -1, color, 3)
+    cv2.imshow("marked", warped)
 
 
 def valid_contour(target_width, target_height, min_width, min_height, tolerance, contour):
@@ -145,9 +192,6 @@ def main():
                     help="path to the input image")
     args = vars(ap.parse_args())
 
-    # define the answer key which maps the question number
-    # to the correct answer
-    ANSWER_KEY = {0: 1, 1: 4, 2: 0, 3: 3, 4: 1}
 
     # load the image, convert it to grayscale, blur it slightly
     user_image = cv2.imread(args["image"]).copy()
@@ -157,24 +201,24 @@ def main():
 
     cv2.imshow("warped", warped)
 
-    # isolate section
+    # isolate column
     columns = [[(7/8) / 7, (1 + 3/4) / 7]]
     for columnRange in columns:
         (original_height, original_width) = np.shape(warped)
 
-        print(columnRange[0])
-        print(columnRange[1])
-        print(original_width * columnRange[0])
-        print(original_width * columnRange[1])
-        print("h", original_height)
-        print("w", original_width)
+        # print(columnRange[0])
+        # print(columnRange[1])
+        # print(original_width * columnRange[0])
+        # print(original_width * columnRange[1])
+        # print("h", original_height)
+        # print("w", original_width)
 
         x1 = int(original_width * columnRange[0])
         x2 = int(original_width * columnRange[1])
 
         column_image = warped[0:original_height, x1:x2].copy()
         cv2.imshow("cropped?", column_image)
-        get_bubbles(column_image)
+        grade_column(column_image)
 
     cv2.waitKey(0)
 
