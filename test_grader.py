@@ -2,6 +2,7 @@
 import math
 
 from imutils.perspective import four_point_transform
+from imutils import contours
 import numpy as np
 import argparse
 import imutils
@@ -63,12 +64,8 @@ def get_section(width, height, passed_image):
                 if valid_contour(width, height, 100, 100, 0.1, approx):
                     section_contours.append(approx)
 
-        def contour_height(ele):
-            bounding_rect = cv2.boundingRect(ele)
-            return bounding_rect[1]
-
-        section_contours = sorted(section_contours, key=contour_height, reverse=True)
-
+        section_contours = contours.sort_contours(section_contours, method="top-to-bottom")[0]
+    print(section_contours[0])
     # numpy.reshape: 4 arrays, each with 2 elements
     warped = four_point_transform(gray, section_contours[0].reshape(4, 2))
     return warped
@@ -119,11 +116,12 @@ def get_bubbles(warped):
             print("valid", i)
             blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
             question_contours.append(contour)
-        # else:
-        #     # print("NO")
+
+    question_contours = contours.sort_contours(question_contours, method="top-to-bottom")[0]
 
     blank_image = cv2.drawContours(blank_image, question_contours, -1, (0, 0, 255), 1)
     cv2.imshow("question contours", blank_image)
+    return question_contours
 
 
 def valid_contour(target_width, target_height, min_width, min_height, tolerance, contour):
@@ -159,7 +157,24 @@ def main():
 
     cv2.imshow("warped", warped)
 
-    get_bubbles(warped)
+    # isolate section
+    columns = [[(7/8) / 7, (1 + 3/4) / 7]]
+    for columnRange in columns:
+        (original_height, original_width) = np.shape(warped)
+
+        print(columnRange[0])
+        print(columnRange[1])
+        print(original_width * columnRange[0])
+        print(original_width * columnRange[1])
+        print("h", original_height)
+        print("w", original_width)
+
+        x1 = int(original_width * columnRange[0])
+        x2 = int(original_width * columnRange[1])
+
+        column_image = warped[0:original_height, x1:x2].copy()
+        cv2.imshow("cropped?", column_image)
+        get_bubbles(column_image)
 
     cv2.waitKey(0)
 
