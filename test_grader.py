@@ -4,15 +4,13 @@ import math
 from imutils.perspective import four_point_transform
 from imutils import contours
 import numpy as np
-import argparse
 import imutils
 import cv2
 import os
 
-
 # define the answer key which maps the question number
 # to the correct answer
-ANSWER_KEY = {0: 2, 1: 3, 2: 0, 3: 3, 4: 1, 5: 1, 6: 1, 7: 3, 8: 3, 9: 2}
+ANSWER_KEY = {0: 2, 1: 3, 2: 0, 3: 3, 4: 1, 5: 1, 6: 1, 7: 3, 8: 3, 9: 2, 10: 2}
 
 
 def auto_canny(image, sigma=0.33):
@@ -27,7 +25,6 @@ def auto_canny(image, sigma=0.33):
 
 
 def get_section(width, height, passed_image):
-
     # find edges
     # ret, thresh = cv2.threshold(edged, 127, 255, 0)
 
@@ -95,13 +92,13 @@ def grade_column(warped):
     # fifth parameter must be odd
     # TODO: use text recognition?
     warped = cv2.GaussianBlur(warped, (1, 1), 0)
-    thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 501, 15)
+    thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 501, 5)
     cv2.imshow("thresh", thresh)
 
     # find contours in the thresholded image, then initialize
     # the list of contours that correspond to questions
     all_contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
-                                                  cv2.CHAIN_APPROX_SIMPLE)
+                                               cv2.CHAIN_APPROX_SIMPLE)
 
     question_contours = []
 
@@ -110,22 +107,22 @@ def grade_column(warped):
 
     all_image = cv2.drawContours(blank_image.copy(), all_contours, -1, (0, 0, 255), 1)
     cv2.imshow("all contours", all_image)
-
     i = 0
     for contour in all_contours:
         i += 1
         (x, y, w, h) = cv2.boundingRect(contour)
-        if valid_contour(1/8, 1/16, 10, 10, 0.4, contour):
+        if valid_contour(112.952, 70.595, 9, 9, 0.5, contour):
             # blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
             question_contours.append(contour)
 
     question_contours = contours.sort_contours(question_contours, method="top-to-bottom")[0]
 
-    i = 0
-    for contour in question_contours:
-        i += 1
-        (x, y, w, h) = cv2.boundingRect(contour)
-        blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    # i = 0
+    # for contour in question_contours:
+    #     i += 1
+    #     (x, y, w, h) = cv2.boundingRect(contour)
+    #     blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2,
+    #                               cv2.LINE_AA)
 
     blank_image = cv2.drawContours(blank_image, question_contours, -1, (0, 0, 255), 1)
     cv2.imshow("question contours", blank_image)
@@ -133,7 +130,7 @@ def grade_column(warped):
     correct = 0
     # each question has 5 possible answers, to loop over the
     # question in batches of 5
-    for (q, i) in enumerate(np.arange(0, len(question_contours), 4)):
+    for (question, i) in enumerate(np.arange(0, len(question_contours), 4)):
         # sort the contours for the current question from
         # left to right, then initialize the index of the
         # bubbled answer
@@ -159,13 +156,14 @@ def grade_column(warped):
         # initialize the contour color and the index of the
         # *correct* answer
         color = (0, 0, 255)
-        k = ANSWER_KEY[q]
+        k = ANSWER_KEY[question]
         # check to see if the bubbled answer is correct
         if k == bubbled[1]:
             color = (0, 255, 0)
             correct += 1
         # draw the outline of the correct answer on the test
         # print(sorted_bubbles[k])
+        print(k)
         cv2.drawContours(warped, [sorted_bubbles[k]], -1, color, 3)
     cv2.imshow("marked", warped)
 
@@ -184,38 +182,29 @@ def valid_contour(target_width, target_height, min_width, min_height, tolerance,
 
 
 def main():
-    # construct the argument parse and parse the arguments
-    # noinspection DuplicatedCode
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-i", "--image", required=True,
-                    help="path to the input image")
-    args = vars(ap.parse_args())
-
     # load the image, convert it to grayscale, blur it slightly
-    user_image = cv2.imread(args["image"]).copy()
+    user_image = cv2.imread("images/IMG_2458.jpg").copy()
     # TODO: used for debugging
+    section_width = 5 + 5 / 8
+    section_height = 2
+    top_offset = 0.5
     # user_image = cv2.resize(user_image, (0, 0), fx=0.5, fy=0.5)
-    warped = get_section(7, 1.5, user_image)
+    warped = get_section(section_width, section_height, user_image)
 
     cv2.imshow("warped", warped)
 
-    # isolate column
-    columns = [[(7/8) / 7, (1 + 3/4) / 7]]
-    for columnRange in columns:
+    for i in range(5):
         (original_height, original_width) = np.shape(warped)
 
-        # print(columnRange[0])
-        # print(columnRange[1])
-        # print(original_width * columnRange[0])
-        # print(original_width * columnRange[1])
-        # print("h", original_height)
-        # print("w", original_width)
+        offset = i * 1.1 + 7 / 16
 
-        x1 = int(original_width * columnRange[0])
-        x2 = int(original_width * columnRange[1])
+        x1 = int(original_width * offset / section_width)
+        x2 = int(original_width * (offset + 3 / 4) / section_width)
 
-        column_image = warped[0:original_height, x1:x2].copy()
-        cv2.imshow("cropped?", column_image)
+        y1 = int(original_height * top_offset / section_height)
+
+        column_image = warped[y1:original_height, x1:x2].copy()
+        cv2.imshow("column " + str(i), column_image)
         grade_column(column_image)
 
     cv2.waitKey(0)
