@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 
 # TODO: use auto-canny for better section extraction
+# TODO: must work with blank responses
 
 input_image = None
 gray_input_image = None
@@ -66,7 +67,7 @@ def get_bubbles(img):
     all_image = cv2.drawContours(blank_image.copy(), all_contours, -1, (0, 0, 255), 1)
     cv2.imshow("all contours", all_image)
     for contour in all_contours:
-        if check_contour_aspect_ratio(112.952, 70.595, 9, 9, 0.5, contour):
+        if check_contour_aspect_ratio(112.952, 70.595, 40, 20, 0.5, contour):
             filtered_contours.append(contour)
 
     filtered_contours = contours.sort_contours(filtered_contours, method="top-to-bottom")[0]
@@ -74,10 +75,54 @@ def get_bubbles(img):
     bubbles = cv2.drawContours(blank_image.copy(), filtered_contours, -1, (0, 0, 255), 1)
     cv2.imshow("bubble contours", bubbles)
 
-    return filtered_contours
+    return filtered_contours, thresh, None
 
-def grade_column():
+
+def read_bubbles():
     return
+
+
+def grade_column(threshed_image, question_contours, output_image, student_response, key):
+    # each question has 4 possible answers; loop over the
+    # questions in batches of 4
+    for (question_number, i) in enumerate(np.arange(0, len(question_contours), 4)):
+        if question_number > len(key):
+            break
+        # sort the contours for the current question from
+        # left to right, then initialize the index of the
+        # bubbled answer
+        sorted_bubbles = contours.sort_contours(question_contours[i:i + 4])[0]
+        bubbled = None
+
+        # loop over the sorted contours
+        for (j, c) in enumerate(sorted_bubbles):
+            # construct a mask that reveals only the current
+            # "bubble" for the question
+            mask = np.zeros(threshed_image.shape, dtype="uint8")
+            cv2.drawContours(mask, [c], -1, 255, -1)
+            # apply the mask to the thresholded image, then
+            # count the number of non-zero pixels in the
+            # bubble area
+            mask = cv2.bitwise_and(threshed_image, threshed_image, mask=mask)
+            total = cv2.countNonZero(mask)
+            # if the current total has a larger number of total
+            # non-zero pixels, then we are examining the currently
+            # bubbled-in answer
+            if bubbled is None or total > bubbled[0]:
+                bubbled = (total, j)
+        # initialize the contour color and the index of the
+        # *correct* answer
+        color = (0, 0, 255)
+        k = key[question_number]
+        # check to see if the bubbled answer is correct
+        if k == bubbled[1]:
+            color = (0, 255, 0)
+        # draw the outline of the correct answer on the test
+        # print(sorted_bubbles[k])
+        print(k)
+        cv2.drawContours(output_image, [sorted_bubbles[k]], -1, color, 3)
+    return output_image
+
 
 def check_contour_aspect_ratio(target_width, target_height, min_width, min_height, tolerance, contour):
     test_ratio = target_width / target_height
@@ -123,38 +168,48 @@ def main():
     gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
 
     key = [
-        [1, 2, 3, 0, 1, 3, 1, 1, 1, 1, 3, 1, 0, 2, 3, 0, 0, 3, 1, 1, 3, 2, 2, 3, 0, 3, 2, 1, 3, 0, 2, 3]
+        [
+            [1, 2, 3, 0, 1],
+            [3, 1, 1, 1, 1],
+            [3, 1, 0, 2, 3],
+            [0, 0, 3, 1, 1, 3, 2, 2, 3, 0],
+            [3, 2, 1, 3, 0, 2, 3]
+        ]
     ]
     grading = True
     sections = [
         {
             'dimensions': [5 + 5 / 8, 2],
             'top_offset': 0.5,
-            'columns': 5
+            # 'columns': 5
+            'columns': 1
         }
     ]
-    for section in sections:
-        dimensions = section['dimensions']
+    for sec_info in sections:
+        dimensions = sec_info['dimensions']
         section_image = get_section(dimensions[0], dimensions[1])
         section_crop = crop_border(section_image, 10)
 
-        bubble_contours = []
-        for i in range(section['columns']):
-            (original_height, original_width) = np.shape(section)
+        values = []
+        for i in range(sec_info['columns']):
+            (original_height, original_width) = np.shape(section_crop)
 
             offset = i * 1.1 + 7 / 16
 
             x1 = int(original_width * offset / dimensions[0])
             x2 = int(original_width * (offset + 3 / 4) / dimensions[0])
 
-            y1 = int(original_height * section['top_offset'] / dimensions[1])
+            y1 = int(original_height * sec_info['top_offset'] / dimensions[1])
 
-            column_image = section[y1:original_height, x1:x2].copy()
+            column_image = section_crop[y1:original_height, x1:x2].copy()
+            # TODO: this is a bit circuitous?: going to and from gray to rgb
             cv2.imshow("column " + str(i), column_image)
-            bubble_contours.append(get_bubbles(column_image))
+            bubbles, thresh, column_response = get_bubbles(column_image)
 
             if grading:
-                graded_column = grade_column()
+                color_column = cv2.cvtColor(column_image, cv2.COLOR_GRAY2BGR)
+                graded_column = grade_column(thresh, bubbles, color_column, column_response, key[0][i])
+                cv2.imshow("graded", graded_column)
 
     cv2.waitKey(0)
 
