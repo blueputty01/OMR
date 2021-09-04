@@ -4,46 +4,22 @@ import math
 from imutils.perspective import four_point_transform
 from imutils import contours
 import numpy as np
-import imutils
 import cv2
-import os
 
-# define the answer key which maps the question number
-# to the correct answer
-ANSWER_KEY = {0: 2, 1: 3, 2: 0, 3: 3, 4: 1, 5: 1, 6: 1, 7: 3, 8: 3, 9: 2, 10: 2}
+# TODO: use auto-canny for better section extraction
 
-
-def auto_canny(image, sigma=0.33):
-    # compute the median of the single channel pixel intensities
-    v = np.median(image)
-    # apply automatic Canny edge detection using the computed median
-    lower = int(max(0, (1.0 - sigma) * v))
-    upper = int(min(255, (1.0 + sigma) * v))
-    cannied = cv2.Canny(image, lower, upper)
-    # return the edged image
-    return cannied
+input_image = None
+gray_input_image = None
 
 
-def get_section(width, height, passed_image):
-    # find edges
-    # ret, thresh = cv2.threshold(edged, 127, 255, 0)
-
-    gray = cv2.cvtColor(passed_image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    edged = auto_canny(blurred)
+def get_section(width, height):
+    blurred = cv2.GaussianBlur(gray_input_image, (3, 3), 0)
     # TODO: smooth out auto canny instead of adaptive threshold?
     # https://stackoverflow.com/questions/24672414/adaptive-parameter-for-canny-edge
+    # edged = auto_canny(blurred)
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 4)
     contour_data, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(passed_image, contour_data, -1, (0, 0, 255), 3)
 
-    os.chdir("./")
-    cv2.imwrite("thresh.png", thresh)
-    cv2.imwrite("edged.png", edged)
-
-    # resized = resize_with_aspect_ratio(passed_image, height=700)
-    # cv2.imshow("all contours", resized)
-    # ensure that at least one contour was found
     test_ratio = width / height
     section_contours = []
     if len(contour_data) > 0:
@@ -63,13 +39,76 @@ def get_section(width, height, passed_image):
                 # compute the bounding box of the contour, then use the
                 # bounding box to derive the aspect ratio
                 # todo: size the image so that these values work no matter input size
-                if valid_contour(width, height, 100, 100, 0.1, approx):
+                if check_contour_aspect_ratio(width, height, 100, 100, 0.1, approx):
                     section_contours.append(approx)
 
         section_contours = contours.sort_contours(section_contours, method="top-to-bottom")[0]
     # numpy.reshape: 4 arrays, each with 2 elements
-    warped = four_point_transform(gray, section_contours[0].reshape(4, 2))
+    warped = four_point_transform(gray_input_image, section_contours[0].reshape(4, 2))
     return warped
+
+
+def read_section(section, columns, top_cutoff_ratio, key):
+    def get_bubbles(img):
+        img = cv2.GaussianBlur(img, (1, 1), 0)
+        thresh = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 501, 5)
+        cv2.imshow("thresh", thresh)
+
+        # find contours in the thresholded image, then initialize
+        # the list of contours that correspond to questions
+        all_contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
+                                                   cv2.CHAIN_APPROX_SIMPLE)
+
+        filtered_contours = []
+
+        height, width = thresh.shape
+        blank_image = np.zeros((height, width, 3), np.uint8)
+
+        all_image = cv2.drawContours(blank_image.copy(), all_contours, -1, (0, 0, 255), 1)
+        cv2.imshow("all contours", all_image)
+        for contour in all_contours:
+            if check_contour_aspect_ratio(112.952, 70.595, 9, 9, 0.5, contour):
+                filtered_contours.append(contour)
+
+        filtered_contours = contours.sort_contours(filtered_contours, method="top-to-bottom")[0]
+
+        bubbles = cv2.drawContours(blank_image.copy(), filtered_contours, -1, (0, 0, 255), 1)
+        cv2.imshow("bubble contours", bubbles)
+
+        return filtered_contours
+
+    # TODO: replace with variable
+    section_width = 5 + 5 / 8
+
+    bubble_contours = []
+    for i in range(columns):
+        (original_height, original_width) = np.shape(section)
+
+        offset = i * 1.1 + 7 / 16
+
+        x1 = int(original_width * offset / section_width)
+        x2 = int(original_width * (offset + 3 / 4) / section_width)
+
+        y1 = int(original_height * top_cutoff_ratio)
+
+        column_image = section[y1:original_height, x1:x2].copy()
+        cv2.imshow("column " + str(i), column_image)
+        bubble_contours.append(get_bubbles(column_image))
+
+    return bubble_contours
+
+
+def check_contour_aspect_ratio(target_width, target_height, min_width, min_height, tolerance, contour):
+    test_ratio = target_width / target_height
+    # bounding box to derive the aspect ratio
+    (x, y, width, height) = cv2.boundingRect(contour)
+    ratio = width / float(height)
+
+    # todo: size the image so that these values work no matter input size
+    if width >= min_width and height >= min_height:
+        if math.isclose(ratio, test_ratio, rel_tol=tolerance):
+            return True
+    return False
 
 
 def resize_with_aspect_ratio(image, width=None, height=None, inter=cv2.INTER_AREA):
@@ -88,124 +127,38 @@ def resize_with_aspect_ratio(image, width=None, height=None, inter=cv2.INTER_ARE
     return cv2.resize(image, dim, interpolation=inter)
 
 
-def grade_column(warped):
-    # fifth parameter must be odd
-    # TODO: use text recognition?
-    warped = cv2.GaussianBlur(warped, (1, 1), 0)
-    thresh = cv2.adaptiveThreshold(warped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 501, 5)
-    cv2.imshow("thresh", thresh)
-
-    # find contours in the thresholded image, then initialize
-    # the list of contours that correspond to questions
-    all_contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
-                                               cv2.CHAIN_APPROX_SIMPLE)
-
-    question_contours = []
-
-    height, width = thresh.shape
-    blank_image = np.zeros((height, width, 3), np.uint8)
-
-    all_image = cv2.drawContours(blank_image.copy(), all_contours, -1, (0, 0, 255), 1)
-    cv2.imshow("all contours", all_image)
-    i = 0
-    for contour in all_contours:
-        i += 1
-        (x, y, w, h) = cv2.boundingRect(contour)
-        if valid_contour(112.952, 70.595, 9, 9, 0.5, contour):
-            # blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-            question_contours.append(contour)
-
-    question_contours = contours.sort_contours(question_contours, method="top-to-bottom")[0]
-
-    # i = 0
-    # for contour in question_contours:
-    #     i += 1
-    #     (x, y, w, h) = cv2.boundingRect(contour)
-    #     blank_image = cv2.putText(blank_image, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2,
-    #                               cv2.LINE_AA)
-
-    blank_image = cv2.drawContours(blank_image, question_contours, -1, (0, 0, 255), 1)
-    cv2.imshow("question contours", blank_image)
-
-    correct = 0
-    # each question has 5 possible answers, to loop over the
-    # question in batches of 5
-    for (question, i) in enumerate(np.arange(0, len(question_contours), 4)):
-        # sort the contours for the current question from
-        # left to right, then initialize the index of the
-        # bubbled answer
-        sorted_bubbles = contours.sort_contours(question_contours[i:i + 4])[0]
-        bubbled = None
-
-        # loop over the sorted contours
-        for (j, c) in enumerate(sorted_bubbles):
-            # construct a mask that reveals only the current
-            # "bubble" for the question
-            mask = np.zeros(thresh.shape, dtype="uint8")
-            cv2.drawContours(mask, [c], -1, 255, -1)
-            # apply the mask to the thresholded image, then
-            # count the number of non-zero pixels in the
-            # bubble area
-            mask = cv2.bitwise_and(thresh, thresh, mask=mask)
-            total = cv2.countNonZero(mask)
-            # if the current total has a larger number of total
-            # non-zero pixels, then we are examining the currently
-            # bubbled-in answer
-            if bubbled is None or total > bubbled[0]:
-                bubbled = (total, j)
-        # initialize the contour color and the index of the
-        # *correct* answer
-        color = (0, 0, 255)
-        k = ANSWER_KEY[question]
-        # check to see if the bubbled answer is correct
-        if k == bubbled[1]:
-            color = (0, 255, 0)
-            correct += 1
-        # draw the outline of the correct answer on the test
-        # print(sorted_bubbles[k])
-        print(k)
-        cv2.drawContours(warped, [sorted_bubbles[k]], -1, color, 3)
-    cv2.imshow("marked", warped)
-
-
-def valid_contour(target_width, target_height, min_width, min_height, tolerance, contour):
-    test_ratio = target_width / target_height
-    # bounding box to derive the aspect ratio
-    (x, y, width, height) = cv2.boundingRect(contour)
-    ratio = width / float(height)
-
-    # todo: size the image so that these values work no matter input size
-    if width >= min_width and height >= min_height:
-        if math.isclose(ratio, test_ratio, rel_tol=tolerance):
-            return True
-    return False
-
-
 def main():
+    def crop_border(image, border):
+        (h, w) = np.shape(image)
+        crop = section_image[border:h - border, border: w - border]
+        return crop
+
     # load the image, convert it to grayscale, blur it slightly
-    user_image = cv2.imread("images/IMG_2458.jpg").copy()
-    # TODO: used for debugging
-    section_width = 5 + 5 / 8
-    section_height = 2
-    top_offset = 0.5
-    # user_image = cv2.resize(user_image, (0, 0), fx=0.5, fy=0.5)
-    warped = get_section(section_width, section_height, user_image)
+    # TODO: read in all images
+    global input_image
+    global gray_input_image
+    input_image = cv2.imread("images/IMG_2458.jpg")
+    resize_with_aspect_ratio(input_image, 3024, 4032)
+    gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
 
-    cv2.imshow("warped", warped)
+    key = [
+        [1, 2, 3, 0, 1, 3, 1, 1, 1, 1, 3, 1, 0, 2, 3, 0, 0, 3, 1, 1, 3, 2, 2, 3, 0, 3, 2, 1, 3, 0, 2, 3]
+    ]
+    grading = True
+    sections = [
+        {
+            'dimensions': [5 + 5 / 8, 2],
+            'top_offset': 0.5,
+            'columns': 5
+        }
+    ]
+    for (i, section) in enumerate(sections):
+        dimensions = section['dimensions']
+        section_image = get_section(dimensions[0], dimensions[1])
+        section_crop = crop_border(section_image, 10)
 
-    for i in range(5):
-        (original_height, original_width) = np.shape(warped)
-
-        offset = i * 1.1 + 7 / 16
-
-        x1 = int(original_width * offset / section_width)
-        x2 = int(original_width * (offset + 3 / 4) / section_width)
-
-        y1 = int(original_height * top_offset / section_height)
-
-        column_image = warped[y1:original_height, x1:x2].copy()
-        cv2.imshow("column " + str(i), column_image)
-        grade_column(column_image)
+        key_to_pass = key[i] if grading else None
+        read_section(section_crop, section['columns'], section['top_offset'] / dimensions[1], key_to_pass)
 
     cv2.waitKey(0)
 
