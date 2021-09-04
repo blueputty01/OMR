@@ -48,55 +48,36 @@ def get_section(width, height):
     return warped
 
 
-def read_section(section, columns, top_cutoff_ratio, key):
-    def get_bubbles(img):
-        img = cv2.GaussianBlur(img, (1, 1), 0)
-        thresh = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 501, 5)
-        cv2.imshow("thresh", thresh)
+def get_bubbles(img):
+    img = cv2.GaussianBlur(img, (1, 1), 0)
+    thresh = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 501, 5)
+    cv2.imshow("thresh", thresh)
 
-        # find contours in the thresholded image, then initialize
-        # the list of contours that correspond to questions
-        all_contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
-                                                   cv2.CHAIN_APPROX_SIMPLE)
+    # find contours in the thresholded image, then initialize
+    # the list of contours that correspond to questions
+    all_contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
+                                               cv2.CHAIN_APPROX_SIMPLE)
 
-        filtered_contours = []
+    filtered_contours = []
 
-        height, width = thresh.shape
-        blank_image = np.zeros((height, width, 3), np.uint8)
+    height, width = thresh.shape
+    blank_image = np.zeros((height, width, 3), np.uint8)
 
-        all_image = cv2.drawContours(blank_image.copy(), all_contours, -1, (0, 0, 255), 1)
-        cv2.imshow("all contours", all_image)
-        for contour in all_contours:
-            if check_contour_aspect_ratio(112.952, 70.595, 9, 9, 0.5, contour):
-                filtered_contours.append(contour)
+    all_image = cv2.drawContours(blank_image.copy(), all_contours, -1, (0, 0, 255), 1)
+    cv2.imshow("all contours", all_image)
+    for contour in all_contours:
+        if check_contour_aspect_ratio(112.952, 70.595, 9, 9, 0.5, contour):
+            filtered_contours.append(contour)
 
-        filtered_contours = contours.sort_contours(filtered_contours, method="top-to-bottom")[0]
+    filtered_contours = contours.sort_contours(filtered_contours, method="top-to-bottom")[0]
 
-        bubbles = cv2.drawContours(blank_image.copy(), filtered_contours, -1, (0, 0, 255), 1)
-        cv2.imshow("bubble contours", bubbles)
+    bubbles = cv2.drawContours(blank_image.copy(), filtered_contours, -1, (0, 0, 255), 1)
+    cv2.imshow("bubble contours", bubbles)
 
-        return filtered_contours
+    return filtered_contours
 
-    # TODO: replace with variable
-    section_width = 5 + 5 / 8
-
-    bubble_contours = []
-    for i in range(columns):
-        (original_height, original_width) = np.shape(section)
-
-        offset = i * 1.1 + 7 / 16
-
-        x1 = int(original_width * offset / section_width)
-        x2 = int(original_width * (offset + 3 / 4) / section_width)
-
-        y1 = int(original_height * top_cutoff_ratio)
-
-        column_image = section[y1:original_height, x1:x2].copy()
-        cv2.imshow("column " + str(i), column_image)
-        bubble_contours.append(get_bubbles(column_image))
-
-    return bubble_contours
-
+def grade_column():
+    return
 
 def check_contour_aspect_ratio(target_width, target_height, min_width, min_height, tolerance, contour):
     test_ratio = target_width / target_height
@@ -152,13 +133,28 @@ def main():
             'columns': 5
         }
     ]
-    for (i, section) in enumerate(sections):
+    for section in sections:
         dimensions = section['dimensions']
         section_image = get_section(dimensions[0], dimensions[1])
         section_crop = crop_border(section_image, 10)
 
-        key_to_pass = key[i] if grading else None
-        read_section(section_crop, section['columns'], section['top_offset'] / dimensions[1], key_to_pass)
+        bubble_contours = []
+        for i in range(section['columns']):
+            (original_height, original_width) = np.shape(section)
+
+            offset = i * 1.1 + 7 / 16
+
+            x1 = int(original_width * offset / dimensions[0])
+            x2 = int(original_width * (offset + 3 / 4) / dimensions[0])
+
+            y1 = int(original_height * section['top_offset'] / dimensions[1])
+
+            column_image = section[y1:original_height, x1:x2].copy()
+            cv2.imshow("column " + str(i), column_image)
+            bubble_contours.append(get_bubbles(column_image))
+
+            if grading:
+                graded_column = grade_column()
 
     cv2.waitKey(0)
 
