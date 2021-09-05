@@ -167,56 +167,9 @@ def crop_border(image, border):
 
 
 # TODO: process page
-def process_section(section_image, section_info, section_id, grading):
+def process_page(grading):
     global key
 
-    selections = []
-
-    dimensions = section_info['dimensions']
-
-    for j in range(section_info['columns']):
-        (original_height, original_width) = np.shape(section_image)
-
-        offset = j * 1.1 + 7 / 16
-
-        x1 = int(original_width * offset / dimensions[0])
-        x2 = int(original_width * (offset + 3 / 4) / dimensions[0])
-
-        y1 = int(original_height * section_info['top_offset'] / dimensions[1])
-
-        column_image = section_image[y1:original_height, x1:x2].copy()
-        # TODO: this is a bit circuitous?: going to and from gray to rgb
-        # cv2.imshow("column " + str(j), column_image)
-        bubbles, thresh = get_bubbles(column_image)
-        column_selections, selected_bubbles = read_bubbles(thresh, bubbles)
-        selections.append(column_selections)
-
-        if grading:
-            # put this on hold
-            color_column = cv2.cvtColor(column_image, cv2.COLOR_GRAY2BGR)
-            graded_column = grade_column(color_column, selected_bubbles, column_selections, key[section_id][j])
-            cv2.imshow("graded", graded_column)
-    return selections
-
-
-def main():
-    # TODO: read in all images
-    global input_image
-    global gray_input_image
-    input_image = cv2.imread("images/IMG_2458.jpg")
-    resize_with_aspect_ratio(input_image, 3024, 4032)
-    gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
-
-    constant_key = [
-        [
-            [1, 2, 3, 0, 1],
-            [3, 1, 1, 1, 1],
-            [3, 1, 0, 2, 3],
-            [0, 0, 3, 1, 1, 3, 2, 2, 3, 0],
-            [3, 2, 1, 3, 0, 2, 3]
-        ]
-    ]
-    grading = False
     sections = [
         {
             'dimensions': [5 + 5 / 8, 2],
@@ -229,20 +182,53 @@ def main():
             'columns': 4
         }
     ]
-    global key
-    if not grading:
-        key = []
+    selections = []
 
-    for i, sec_info in enumerate(sections):
-        if not grading:
-            key.append([])
+    for sec_id, sec_info in enumerate(sections):
+        selections.append([])
 
         dimensions = sec_info['dimensions']
         section_image = get_section(dimensions[0], dimensions[1])
         section_crop = crop_border(section_image, 10)
 
-        selections = process_section(section_crop, sec_info, i, grading)
+        dimensions = sec_info['dimensions']
 
+        for j in range(sec_info['columns']):
+            (original_height, original_width) = np.shape(section_crop)
+
+            offset = j * 1.1 + 7 / 16
+
+            x1 = int(original_width * offset / dimensions[0])
+            x2 = int(original_width * (offset + 3 / 4) / dimensions[0])
+
+            y1 = int(original_height * sec_info['top_offset'] / dimensions[1])
+
+            column_image = section_crop[y1:original_height, x1:x2].copy()
+            # TODO: this is a bit circuitous?: going to and from gray to rgb
+            # cv2.imshow("column " + str(j), column_image)
+            bubbles, thresh = get_bubbles(column_image)
+            column_selections, selected_bubbles = read_bubbles(thresh, bubbles)
+            selections[sec_id].append(column_selections)
+
+            if grading:
+                # put this on hold
+                color_column = cv2.cvtColor(column_image, cv2.COLOR_GRAY2BGR)
+                graded_column = grade_column(color_column, selected_bubbles, column_selections, key[sec_id][j])
+                cv2.imshow("graded", graded_column)
+    return selections
+
+
+def main():
+    # TODO: read in all images
+    global input_image
+    global gray_input_image
+    global key
+    input_image = cv2.imread("images/IMG_2458.jpg")
+    resize_with_aspect_ratio(input_image, 3024, 4032)
+    gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
+
+    key = process_page(False)
+    print(key)
     cv2.waitKey(0)
 
 
