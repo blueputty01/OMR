@@ -1,6 +1,7 @@
 # import the necessary packages
 import math
 
+import spreadsheet_writer
 from imutils.perspective import four_point_transform
 from imutils import contours
 import numpy as np
@@ -13,6 +14,7 @@ input_image = None
 gray_input_image = None
 key = []
 selections = []
+students = []
 
 
 def get_section(width, height):
@@ -219,6 +221,17 @@ def process_page(grading):
     return selections
 
 
+def set_students(s):
+    global students
+    students = s
+    print("students set to ", s)
+
+
+def get_student():
+    get_section(7/8, 3 + 7/8)
+    return
+
+
 # todo: combine entry with process_page
 def entry(image_paths, grade):
     global input_image
@@ -231,10 +244,48 @@ def entry(image_paths, grade):
         resize_with_aspect_ratio(input_image, 3024, 4032)
         gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
         if grade:
-            selections.append(process_page(True))
+
+            selections.append({
+                'name': get_student(),
+                'selection': process_page(True)}
+            )
 
         else:
             key = process_page(False)
             print(key)
 
     cv2.waitKey(0)
+
+
+def convert_selection(selection):
+    # flatten key
+    flattened_selection = []
+    for section in selection:
+        for column in section:
+            for val in column:
+                flattened_selection.append(val)
+
+    translated_selection = []
+    for option in flattened_selection:
+        if option != -1:
+            translated_selection.append(chr(ord('A') + option))
+        else:
+            translated_selection.append(' ')
+    return translated_selection
+
+
+def write_key():
+    global key
+    converted_key = convert_selection(key)
+    spreadsheet_writer.write_key(converted_key)
+    spreadsheet_writer.save()
+
+
+def write_students():
+    converted_selections = []
+    for obj in selections:
+        obj['selection'] = convert_selection(obj['selection'])
+        converted_selections.append(obj)
+
+    spreadsheet_writer.write_responses(converted_selections)
+    spreadsheet_writer.save()
