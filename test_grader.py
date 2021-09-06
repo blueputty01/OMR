@@ -12,6 +12,7 @@ import cv2
 input_image = None
 gray_input_image = None
 key = []
+selections = []
 
 
 def get_section(width, height):
@@ -210,27 +211,30 @@ def process_page(grading):
             column_selections, selected_bubbles = read_bubbles(thresh, bubbles)
             selections[sec_id].append(column_selections)
 
-            if grading:
-                # put this on hold
-                color_column = cv2.cvtColor(column_image, cv2.COLOR_GRAY2BGR)
-                graded_column = grade_column(color_column, selected_bubbles, column_selections, key[sec_id][j])
-                cv2.imshow("graded", graded_column)
+            # todo: mark up this image
+            # if grading:
+            #     color_column = cv2.cvtColor(column_image, cv2.COLOR_GRAY2BGR)
+            #     graded_column = grade_column(color_column, selected_bubbles, column_selections, key[sec_id][j])
+            #     cv2.imshow("graded", graded_column)
     return selections
 
 
-def main():
-    # TODO: read in all images
+# todo: combine entry with process_page
+def entry(image_paths, grade):
     global input_image
     global gray_input_image
     global key
-    input_image = cv2.imread("images/IMG_2458.jpg")
-    resize_with_aspect_ratio(input_image, 3024, 4032)
-    gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
+    global selections
 
-    key = process_page(False)
-    print(key)
+    for image_path in image_paths:
+        input_image = cv2.imread(image_path)
+        resize_with_aspect_ratio(input_image, 3024, 4032)
+        gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
+        if grade:
+            selections.append(process_page(True))
+
+        else:
+            key = process_page(False)
+            print(key)
+
     cv2.waitKey(0)
-
-
-if __name__ == "__main__":
-    main()
