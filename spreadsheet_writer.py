@@ -26,8 +26,8 @@ def write_key(key):
 
 def write_responses(responses):
     for i, response in enumerate(responses):
-        main_sheet.cell(row=1, column=i + 4).value = response['name']
-        write_row(response['selection'], 4, 2)
+        main_sheet.cell(row=4 + i, column=1).value = response['name']
+        write_row(response['selection'], 4 + i, 2)
 
 
 def save():

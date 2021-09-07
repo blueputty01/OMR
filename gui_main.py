@@ -44,7 +44,7 @@ class Application(Frame):
         except():  # <- naked except is a bad idea
             showerror("Read key", "Error occurred while writing key \n'%s'" % file_path)
 
-        self.image_browse = Button(self, text="Browse for responses", command=self.load_responses)
+        self.image_browse = Button(self, text="Open responses", command=self.load_responses)
         self.image_browse.grid(row=4, column=0, sticky=W)
 
     def load_responses(self):
@@ -62,11 +62,12 @@ class Application(Frame):
             test_grader.entry(file_paths, True)
         except():  # <- naked except is a bad idea
             showerror("Open key image", "Failed to read file\n'%s'" % file_paths)
-
+        print("Finished reading students. Now writing")
         try:
-            test_grader.write_key()
+            test_grader.write_students()
         except():  # <- naked except is a bad idea
             showerror("Read key", "Error occurred while writing responses \n'%s'" % file_paths)
+        print("Successfully wrote data")
 
     def load_students(self):
         file_path = askopenfilename(
