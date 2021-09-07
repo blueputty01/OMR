@@ -1,6 +1,8 @@
 # import the necessary packages
 import math
 
+import numpy
+
 import spreadsheet_writer
 from imutils.perspective import four_point_transform
 from imutils import contours
@@ -82,17 +84,32 @@ def get_bubbles(img):
     return filtered_contours, thresh
 
 
-def read_bubbles(threshed_image, question_contours):
-    selections = []
+def read_mc(threshed_image, question_contours):
+    choice_grid, selected_bubbles = read_bubbles(threshed_image, question_contours, 4)
+    filtered_choices = []
+    for row in choice_grid:
+        choices = []
+        for (selection, bubble) in enumerate(row):
+            if bubble:
+                choices.append(selection)
+        if len(choices) == 1:
+            filtered_choices.extend(choices)
+        else:
+            filtered_choices.append(-1)
+    return filtered_choices, selected_bubbles
+
+
+def read_bubbles(threshed_image, question_contours, cols):
+    grid = []
     selection_contours = []
     # each question has 4 possible answers; loop over the
     # questions in batches of 4
-    for (question_number, i) in enumerate(np.arange(0, len(question_contours), 4)):
+    for (row_number, i) in enumerate(np.arange(0, len(question_contours), cols)):
+        row = numpy.full(cols, False, dtype=bool)
         # sort the contours for the current question from
         # left to right, then initialize the index of the
         # bubbled answer
         sorted_bubbles = contours.sort_contours(question_contours[i:i + 4])[0]
-        bubbled = -1
 
         # loop over the sorted contours
         for (option_number, c) in enumerate(sorted_bubbles):
@@ -111,10 +128,10 @@ def read_bubbles(threshed_image, question_contours):
             # TODO: this might cause problems with sizing
             # TODO: allow for no bubble
             if total > 1000:
-                bubbled = option_number
-        selections.append(bubbled)
+                row[option_number] = True
+        grid.append(row)
         selection_contours.append(sorted_bubbles)
-    return selections, selection_contours
+    return grid, selection_contours
 
 
 def grade_column(output_image, bubble_contours, column_responses, key):
@@ -210,7 +227,7 @@ def process_page(grading):
             # TODO: this is a bit circuitous?: going to and from gray to rgb
             # cv2.imshow("column " + str(j), column_image)
             bubbles, thresh = get_bubbles(column_image)
-            column_selections, selected_bubbles = read_bubbles(thresh, bubbles)
+            column_selections, selected_bubbles = read_mc(thresh, bubbles)
             selections[sec_id].append(column_selections)
 
             # todo: mark up this image
