@@ -84,6 +84,24 @@ def get_bubbles(img):
     return filtered_contours, thresh
 
 
+def read_num_grid(threshed_image, question_contours, grid_size):
+    choice_grid, selected_bubbles = read_bubbles(threshed_image, question_contours, grid_size)
+    sel = [[] for i in range(grid_size)]
+    for (number, row) in enumerate(choice_grid):
+        for (col, bubble) in enumerate(row):
+            if bubble:
+                sel[col].append(number)
+
+    num = ""
+    for col in sel:
+        if len(col) > 1:
+            # invalid; multiple bubbles per column
+            return -1
+        if len(col) > 0:
+            num += str(col[0])
+    return int(num)
+
+
 def read_mc(threshed_image, question_contours):
     choice_grid, selected_bubbles = read_bubbles(threshed_image, question_contours, 4)
     filtered_choices = []
@@ -245,8 +263,20 @@ def set_students(s):
 
 
 def get_student():
-    get_section(7/8, 3 + 7/8)
-    return
+    # TODO: combine with process_page
+    real_height = 3 + 7 / 8
+    real_width = 7 / 8
+    section = get_section(real_width, real_height)
+    section = crop_border(section, 10)
+    (original_height, original_width) = np.shape(section)
+
+    y1 = int(original_height * ((1 / 2) / real_height))
+    y2 = int(original_height * ((1 + 3 / 4) / real_height))
+    column_image = section[y1:y2, 0:original_width]
+    bubbles, thresh = get_bubbles(column_image)
+    student = read_num_grid(thresh, bubbles, 4)
+    print("Identified student", student)
+    return student
 
 
 # todo: combine entry with process_page
@@ -306,3 +336,19 @@ def write_students():
 
     spreadsheet_writer.write_responses(converted_selections)
     spreadsheet_writer.save()
+
+
+def main():
+    global input_image
+    global gray_input_image
+    global key
+    global selections
+
+    input_image = cv2.imread("demo/images/IMG_2458.jpg")
+    resize_with_aspect_ratio(input_image, 3024, 4032)
+    gray_input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
+    get_student()
+
+
+if __name__ == '__main__':
+    main()
